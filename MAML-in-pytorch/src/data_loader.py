@@ -10,11 +10,8 @@ import sys
 import logging
 
 emotion_list = ["angry","sad","happy","neutral"] 
-#datasets_train = ['tess','emodb','ravdess','iemocap']
-#datasets_test = ['emovo', 'shemo', 'urdu']
-
-datasets_train = ['shemo']
-datasets_test = ['shemo']
+datasets_train = ['tess','emodb','ravdess','iemocap']
+datasets_test = ['emovo', 'shemo', 'urdu']
 
 pkl_paths = [ os.path.join('../data', data, data + '.pkl') for data in datasets_train ]
 pkl_paths += [ os.path.join('../data', data, data + '.pkl') for data in datasets_test ]
@@ -36,35 +33,13 @@ test_df = pd.concat(test_csvs)
 audio_feat = {} 
 for d in pkls: audio_feat.update(d)
 
-def split_emotions(csv_path, SEED):
-
-    #df = pd.read_csv(csv_path)
-    #emotions = list( df['emotion'].unique() ) 
-
+def split_emotions(SEED):
+ 
     random.seed(SEED)
     global train_df, test_df
 
     train_df = train_df.sample(frac=1, random_state=SEED).reset_index(drop=True)
     test_df = test_df.sample(frac=1, random_state=SEED).reset_index(drop=True)
-
-    # TODO consider validation set
-    # test_ratio = 0.2  # against total data
-    # val_ratio = 0.2  # against train data
-    # num_total = len(character_folders)
-    # num_test = int(num_total * test_ratio)
-    # num_val = int((num_total - num_test) * val_ratio)
-    # num_train = num_total - num_test - num_val
-
-    # train_chars = character_folders[:num_train]
-    # val_chars = character_folders[num_train:num_train + num_val]
-    # test_chars = character_folders[-num_test:]
-    # return train_chars, val_chars, test_chars
-
-    '''
-    num_train = 3
-    train_chars = emotions[:num_train]
-    test_chars = emotions[num_train:]
-    '''
 
     train_chars = train_df
     test_chars = test_df
@@ -92,7 +67,6 @@ class Task(object):
         self.support_num = support_num
         self.query_num = query_num
 
-        #class_folders = random.sample(emotion_list, self.num_classes)
         class_folders = emotion_list
         labels = list(range(len(class_folders)))
         labels = dict(zip(class_folders, labels))
@@ -112,14 +86,8 @@ class Task(object):
             self.train_roots += samples[c][:support_num]
             self.train_labels += [ labels[c] for i in range(support_num) ]
 
-            ## Take only query num
             self.test_roots += samples[c][support_num:support_num + query_num]
-            #self.test_roots += samples[c][-query_num:]
             self.test_labels += [ labels[c] for i in range(query_num) ]
-
-            ## Take all
-            #self.test_roots += samples[c]
-            #self.test_labels += [ labels[c] for i in range( len(temp) ) ]
 
         samples = dict()
         self.meta_roots = []
@@ -131,43 +99,12 @@ class Task(object):
             self.meta_roots += samples[c][:support_num]
             self.meta_labels += [ labels[c] for i in range(support_num) ]
 
-        '''
-        for c in class_folders:
-            temp = self.train_df[ self.train_df['emotion'] == c ]
-            temp = list( temp['path'] )
-            samples[c] = random.sample(temp, len(temp))
-            self.train_roots += samples[c][:self.support_num]
-            self.train_labels += [ labels[c] for i in range( self.support_num ) ]
-        
-        samples = dict()
-        for c in class_folders:
-            temp = self.test_df[ self.test_df['emotion'] == c ]
-            temp = list( temp['path'] )
-            samples[c] = random.sample(temp, len(temp))
-            self.test_roots += samples[c]
-            self.test_labels += [ labels[c] for i in range( len(temp) ) ]
-        
-        samples = dict()
-        self.meta_roots = []
-        self.meta_labels = []
-        for c in class_folders:
-            temp = self.train_df[ self.train_df['emotion'] == c ]
-            temp = list( temp['path'] )
-            samples[c] = random.sample(temp, len(temp))
-            self.meta_roots += samples[c][:self.support_num]
-            self.meta_labels += [ labels[c] for i in range( self.support_num ) ]
-        
-        print ( self.train_roots )
-        print ( self.meta_roots )
-        print ("-"*20) 
-        '''
-
 class FewShotDataset(Dataset):
     """
     A standard PyTorch definition of Dataset which defines the functions __len__ and __getitem__.
     """
 
-    def __init__(self, filenames, labels, feature_pkl, num_classes, frame_length=120):
+    def __init__(self, filenames, labels, num_classes, frame_length=120):
         """
         Store the filenames of the images to use.
         Specifies transforms to apply on images.
@@ -220,7 +157,7 @@ class SER(Task):
     def __init__(self, *args, **kwargs):
         super(SER, self).__init__(*args, **kwargs)
 
-def fetch_dataloaders(types, task, pkl_path, params):
+def fetch_dataloaders(types, task, params):
     """
     Fetches the DataLoader object for each type in types from task.
     TODO for MAML
@@ -242,21 +179,21 @@ def fetch_dataloaders(types, task, pkl_path, params):
                 train_filenames = task.train_roots
                 train_labels = task.train_labels
                 dl = DataLoader(
-                    FewShotDataset(train_filenames, train_labels, pkl_path, params.num_classes),
+                    FewShotDataset(train_filenames, train_labels, params.num_classes),
                     batch_size=len(train_filenames),  # full-batch in episode
                     shuffle=True)  # TODO args: num_workers, pin_memory
             elif split == 'test':
                 test_filenames = task.test_roots
                 test_labels = task.test_labels
                 dl = DataLoader(
-                    FewShotDataset(test_filenames, test_labels, pkl_path, params.num_classes),
+                    FewShotDataset(test_filenames, test_labels, params.num_classes),
                     batch_size=len(test_filenames),  # full-batch in episode
                     shuffle=False)
             elif split == 'meta':
                 meta_filenames = task.meta_roots
                 meta_labels = task.meta_labels
                 dl = DataLoader(
-                    FewShotDataset(meta_filenames, meta_labels, pkl_path, params.num_classes),
+                    FewShotDataset(meta_filenames, meta_labels, params.num_classes),
                     batch_size=len(meta_filenames),  # full-batch in episode
                     shuffle=True)  # TODO args: num_workers, pin_memory
             else:

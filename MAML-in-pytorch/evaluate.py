@@ -131,20 +131,8 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--data_dir',
-        default='../data/emodb/emodb_train.csv',
-        help="Directory containing the dataset")
-    parser.add_argument(
-        '--test_dir',
-        default='../data/emodb/emodb_test.csv',
-        help="Directory containing the dataset")
-    parser.add_argument(
-        '--pkl_path',
-        default='../data/emodb/emodb.pkl',
-        help="Directory containing the dataset")
-    parser.add_argument(
         '--model_dir',
-        default='experiments/emodb_ravdess_savee_iemocap/125',
+        default='experiments/test',
         help="Directory containing params.json")
     parser.add_argument(
         '--restore_file',
@@ -170,13 +158,10 @@ if __name__ == '__main__':
     torch.manual_seed(SEED)
     if params.cuda: torch.cuda.manual_seed(SEED)
 
-    if params.dataset == 'SER':
-        params.in_channels = 3
-        meta_train_classes, meta_test_classes = split_emotions(
-            args.data_dir, SEED)
-        task_type = SER
-    else:
-        raise ValueError("I don't know your dataset")
+    params.in_channels = 3
+    meta_train_classes, meta_test_classes = split_emotions(
+        args.data_dir, SEED)
+    task_type = SER
 
     if params.cuda:
         model = MetaLearner(params).cuda()
@@ -193,26 +178,18 @@ if __name__ == '__main__':
 
     logging.info("Eval metrics for dataset {}".format(','.join(datasets_test)))
 
-    supports = [ i + 1 for i in range(10) ]
-    max_k = 100
     test_logs = []
 
-    for k in supports:
+    logging.info("Restoring parameters from {}".format(restore_path))
+    utils.load_checkpoint(restore_path, model, meta_optimizer)
 
-        logging.info("Restoring parameters from {}".format(restore_path))
-        utils.load_checkpoint(restore_path, model, meta_optimizer)
-
-        params.num_samples = math.ceil( ( k * max_k ) / 10.0 )
-        #params.num_samples = max_k
-
-        print ( "K:", params.num_samples )
-        # train_metrics = evaluate(model, loss_fn, meta_train_classes,
-        #                                  task_lr, task_type, metrics, params, args,
-        #                                  'train')
-        test_metrics = evaluate(model, loss_fn, meta_test_classes,
-                                        task_lr, task_type, metrics, params, args,
-                                        'test')
-        test_logs.append( test_metrics )
+    # train_metrics = evaluate(model, loss_fn, meta_train_classes,
+    #                                  task_lr, task_type, metrics, params, args,
+    #                                  'train')
+    test_metrics = evaluate(model, loss_fn, meta_test_classes,
+                                    task_lr, task_type, metrics, params, args,
+                                    'test')
+    test_logs.append( test_metrics )
     
     save_dir = "experiments/emodb_ravdess_savee_iemocap/shemo"
     if not os.path.exists(save_dir):
